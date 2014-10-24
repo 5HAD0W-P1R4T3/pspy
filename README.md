@@ -9,9 +9,12 @@
             _\///____________\///////////_____\///___________\////________ 
 
 
+#Usage:
 
-#Process Spy 0.001
-##usage: Process Spy [-h] [-v] [-t] [-k KEY] [-V] [pid]
+'''
+
+Process Spy 0.001
+usage: Process Spy [-h] [-v] [-t] [-k KEY] [-V] [pid]
 
 Fetch VirusTotal File Scans Reports for running processes.
 
@@ -27,6 +30,7 @@ optional arguments:
 
 The APIKEY environment variable can used instead of --key KEY.
 
+'''
 
 #Notes
 
