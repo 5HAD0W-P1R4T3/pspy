@@ -11,7 +11,7 @@
 
 #Usage:
 
-'''
+```
 
 Process Spy 0.001
 usage: Process Spy [-h] [-v] [-t] [-k KEY] [-V] [pid]
@@ -30,7 +30,7 @@ optional arguments:
 
 The APIKEY environment variable can used instead of --key KEY.
 
-'''
+```
 
 #Notes
 
