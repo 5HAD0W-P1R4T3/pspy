@@ -36,7 +36,7 @@ The APIKEY environment variable can used instead of --key KEY.
 
 ##ps + VirusTotal = psyp.py
 
-psyp.py is a triage tool for *rapid incident response*.  
+####psyp.py is a triage tool for *rapid incident response*.  
 
 - If a pid # is specified, Process Spy will fetch the VirusTotal "File Scan" reports for that process' exe.
 - If no pid is specified, Process Spy will enumerate all running processes and fetch VirusTotal File Scan reports for each process exe. 
