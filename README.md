@@ -45,13 +45,25 @@ The APIKEY environment variable can used instead of --key KEY.
 
 - Kudo's to Mark Russinovich for his work to integrate VirusTotal data with SysInternal's Process Explorer (https://twitter.com/markrussinovich/status/428655728002203648). Process Explorer was certainly the inspiration for this project.  pspy.py aims to bring similar system triage capability to multiple platforms.
 
-- vt2public.py is a module for requesting VirusTotal reports. vt2public currenlty supports File Scan Reports and Domain Reports. Why create yet another Python VirusTotal API module? Good question, but in short, a fully 'instrumented' report object is very useful. The report objects returned by vt2public have *object attributes* for the VirusTotal report data of interest to these utilities. vt2public should be forked offer to it's own repo).
-
 - pspy.py requires psutil and tabulate modules
 ``` 
 pip import psutil
 pip import tabulate
 ```
+
+
+# Modules
+
+## pshash 
+
+pshash is an extension of psUtil.Process class that calculates a hash for the processes executable
+
+## vt2public
+
+vt2public.py is a module for requesting VirusTotal reports. vt2public currenlty supports File Scan Reports and Domain Reports. 
+
+Why create yet another Python VirusTotal API module? Good question. In short, a fully 'instrumented' report object is very useful. The report objects returned by vt2public have *object attributes* for the VirusTotal report data of interest to these utilities. vt2public should be forked offer to it's own repo).
+
 
 # dspy.py 
 
