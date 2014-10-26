@@ -8,8 +8,16 @@
            _\/\\\_________\///\\\\\\\\\\\/___\/\\\_________\//\\\\/______ 
             _\///____________\///////////_____\///___________\////________ 
 
+#Process Spy
 
-#Usage:
+#### ps + VirusTotal = psyp.py
+
+#### psyp.py is a triage tool for *rapid incident response*.  
+
+- If a pid # is specified, Process Spy will fetch the VirusTotal "File Scan" reports for that process' exe.
+- If no pid is specified, Process Spy will enumerate all running processes and fetch VirusTotal File Scan reports for each process exe. 
+
+##Usage:
 
 ```
 
@@ -32,14 +40,7 @@ The APIKEY environment variable can used instead of --key KEY.
 
 ```
 
-##ps + VirusTotal = psyp.py
-
-####psyp.py is a triage tool for *rapid incident response*.  
-
-- If a pid # is specified, Process Spy will fetch the VirusTotal "File Scan" reports for that process' exe.
-- If no pid is specified, Process Spy will enumerate all running processes and fetch VirusTotal File Scan reports for each process exe. 
-
-#Notes
+##Notes
 
 - The VirusTotal 2 Public API has rate limits.  Only 4 requests can submitted per minute.  Luckily, in the case of File Scan reports, reports for up to 25 individual files can be submitted per request.  In short, Process Spy can pull 100 reports per minute.
 
