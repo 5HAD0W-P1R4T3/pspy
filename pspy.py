@@ -36,9 +36,15 @@ def SpyOnOne(pid):
 		gofer.resource = p.sha256 
 		gofer.fetch()
 		
-		r = gofer.reports[p.sha256]
-		row = [pid,p.name,r.status,r.positives,r.total,r.permalink]
-		table.append(row)
+		try:
+			r = gofer.reports[p.sha256]
+			row = [pid,p.name,r.status,r.positives,r.total,r.permalink]
+			table.append(row)
+		except KeyError as e:
+			# report not found for process pid
+			row = [pid,p.name,None,None,None,p.sha256]
+			table.append(row)
+
 		header = ["pid","name","status","positives","total","permalink"]
 		print(tabulate(table,header))
 

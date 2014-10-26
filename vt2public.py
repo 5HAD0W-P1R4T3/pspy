@@ -13,7 +13,6 @@ v2tpublic.pys - VirusTotal 2.0 Public API Interface module
 	Copyright 2014 Paul Dicovitsky 
 	License: 	GNU General Public License Version 3 or later
 
-
 Classes:
 	
 	Report:				base VirusTotal Report object
@@ -113,14 +112,15 @@ class DomainReport(Report):
 			self._detectedURLs = rdict.get(self._VT_DETECTED_URLS)
 			self._resolutions = rdict.get(self._VT_RESOLUTIONS)
 			
-			self._categories = rdict.get(self._VT_CATEGORIES)
-			if type(self._categories) is list:
-				self._categories = "(" + (",".join(self._categories)) + ")"
 			
 			self._subdomains = rdict.get(self._VT_subdomains)
 			self._undetected_downloaded_samples = rdict.get(self._VT_undetected_downloaded_samples)			
 			self._detected_downloaded_samples = rdict.get(self._VT_detected_downloaded_samples)
-	
+
+			self._categories = rdict.get(self._VT_CATEGORIES)
+			if type(self._categories) is list:
+				self._categories = "(" + (",".join(self._categories)) + ")"
+
 			# calculate some handy counters
 			self._numberof_URLs = -1
 			self._numberof_subdomains = -1
@@ -133,6 +133,7 @@ class DomainReport(Report):
 					self._numberof_subdomains = len(self._subdomains)
 					self._numberof_undetected_downloaded_samples = len(self._undetected_downloaded_samples)
 					self._numberof_detected_downloaded_samples = len(self._detected_downloaded_samples)
+
 				except TypeError as e:
 					if Flags.DEBUG: print("\t\t\tTypeError {0}".format(e))
 
@@ -211,11 +212,6 @@ class FileScanReport(Report):
 
 		Report.__init__(self,rd)	
 
-		if Flags.DEBUG:
-			print rd
-			print rd.keys()
-			print rd.values()
-
 		# Instance specific variables
 		# dict.get() returns None if a matching key is not found
 
@@ -267,10 +263,11 @@ class Gofer(object):
 
 	# VirusTotal API service constants - fields/table headers
 
-	# _VT_FILEREPORT_URL = "https://www.virustotal.com/vtapi/v2/file/report"
-
 	_VT_MAX_QUERIES_PER_POST = 25
 	_VT_MAX_QUERIES_PER_MINUTE = 4
+
+	_HTTPGET = "get"
+	_HTTPPOST = "post"
 
 	_TOOBIG = "resource lists is longer than {0}, the maximum allowable queries per post".format(_VT_MAX_QUERIES_PER_POST)
 
@@ -286,18 +283,18 @@ class Gofer(object):
 		self._reports = {}						# dictionary of reports retrieved from Virus Total
 
 
-	def RateLimitExceeded(Exception):
+	class RateLimitExceeded(Exception):
 		""" VirusTotal2 Public API Request Rate Limit Exceeded (HTTP 204) """
-		def __init__(self, value):
-			self._value = value
+		def __init__(self, httpstatus):
+			self._httpstatus = httpstatus
 		def __str__(self):
-			return repr(self.value)		
+			return repr(self._httpstatus)		
 		@property
-		def status(self):
-		    return self.value
+		def httpstatus(self):
+		    return self._httpstatus
 
 
-	def PrivilegeError(Exception):
+	class PrivilegeError(Exception):
 		""" VirusTotal2 Public API Insufficient Privileges to perform requested operation (HTTP 403) """
 		def __init__(self, value):
 			self.value = value
@@ -316,7 +313,7 @@ class Gofer(object):
 
 		# increment query counter
 		self._querycounter += 1
-		self._totalqueries += 1 					# count 'em all, just for fun
+		self._totalqueries += 1 								# count 'em all, just for fun
 
 		# check to see if we've exceeded the maximum number queries per minute
 		if self._querycounter > self._VT_MAX_QUERIES_PER_MINUTE:
@@ -329,6 +326,136 @@ class Gofer(object):
 					print(u"{0} VirusTotal Public API rate limit, please wait {1:.2f} seconds".format(hourglass, time2wait))
 				time.sleep(time2wait)
 
+	def _timeout(self):
+		""" take a timeout due to an unexcepted RateLimitExceeded exception """
+		_TIMEOUT = 15
+		if Flags.VERBOSE: print("\tTaking a {0} second timeout".format(_TIMEOUT))
+		time.sleep(_TIMEOUT)
+
+	def _get(self,url,resource):
+		""" certain VirusTotal 2 requests require an HTTP GET """
+
+		parameters = {"domain": resource,"apikey": self._apikey}
+		data = urllib.urlencode(parameters)
+		full_url = url + "?" + data
+		if Flags.DEBUG: print("\trequest url = {0}".format(full_url))
+		req = urllib2.Request(full_url)
+		
+		while True:												# keep trying to beat the rate limiter
+
+			try:
+				response = urllib2.urlopen(req)
+				httpstatus = response.code
+				if httpstatus == 204:
+					raise self.RateLimitExceeded(httpstatus)
+				break	
+
+			except self.RateLimitExceeded as e:
+				police = u"\u2301"	
+				if Flags.VERBOSE: print(u"{0} VirusTotal Public API Rate Limit Exceeded (HTTP Status {1})".format(police,e.httpstatus))
+				self._timeout()
+				continue
+			
+			except urllib2.URLError as e:
+				if Flags.DEBUG:
+					print("URLError:")
+					print("\tUnable to reach server.")
+					print("\tREASON {0}".format(e.reason))
+					print("\tHOST {0}".format(req.host))
+					print("\tDATA {0}".format(req.data))
+					print("\tURL {0}".format(req.get_full_url()))
+					break
+
+			except urllib2.HTTPError as e:
+				if Flags.DEBUG:
+					print("HTTPError:")
+					print("\treq:{0}".format(req))
+					print("\t{0} {1}".format(e.code,e.read()))
+					break
+
+		if Flags.DEBUG: print("\t\tHTTP Status Code: {0}".format(httpstatus))
+
+		return response
+
+
+	def _post(self,url,resource):
+		""" 
+			certain VirusTotal 2 requests require an HTTP POST 
+			source: https://www.virustotal.com/en/documentation/public-api/#getting-file-scans 
+		"""
+
+		parameters = {"resource": resource,"apikey": self._apikey}
+		data = urllib.urlencode(parameters)
+		req = urllib2.Request(url, data)
+
+		while True:										# keep trying to beat the rate limiter
+
+			try:
+				response = urllib2.urlopen(req)
+				httpstatus = response.code
+				if httpstatus == 204:
+					raise self.RateLimitExceeded(httpstatus)
+				break
+
+			except self.RateLimitExceeded as e:
+				police = u"\u2301"
+				print(u"{0}VirusTotal Public API Rate Limit Exceeded (HTTP Status {1})".format(police,e))
+				self._timeout()
+				continue
+
+			except urllib2.URLError as e:
+				if Flags.DEBUG:
+					print("URLError:")
+					print("\tUnable to reach server.")
+					print("\tREASON {0}".format(e.reason))
+					print("\tHOST {0}".format(req.host))
+					print("\tDATA {0}".format(req.data))
+					print("\tURL {0}".format(req.get_full_url()))
+				break
+
+			except urllib2.HTTPError as e:
+				if Flags.DEBUG:
+					print("HTTPError:")
+					print("\treq:{0}".format(req))
+					print("\t{0} {1}".format(e.code,e.read()))
+				break
+
+			if Flags.DEBUG: print("\t\tHTTP Status Code: {0}".format(httpstatus))
+
+		return response
+	
+
+	def _fetch_report(self,method,url,resource):
+		""" submit HTTP request to VirusTotal for a class of report """
+
+		# don't get a speeding ticket - Virus Total only allows 4 requests per minute with the Public API
+		self._rate_limiter()
+		
+		if method == self._HTTPGET:
+			response = self._get(url,resource)
+
+		elif method == self._HTTPPOST:
+			response = self._post(url,resource)
+	
+		response_dict = {}
+		json = response.read()			
+
+		try:
+			response_dict = simplejson.loads(json)
+
+		except simplejson.scanner.JSONDecodeError as e:
+			if Flags.DEBUG:
+				print("JSONDecodeError:")
+				print("\t{0}".format(e))
+				print("\tresponse.code: {0}".format(response.code))
+				print("\tresponse.msg: {0}".format(response.msg))
+				print("\tjson: {0}".format(repr(json)))
+
+		# for consistency's sake, always return a list
+		if isinstance(response_dict,list):
+			return response_dict
+		else:												
+			return [response_dict]
 
 	@property
 	def resource(self):
@@ -355,89 +482,15 @@ class DomainGofer(Gofer):
 
 	""" DomainGofer: Fetches VirusTotal Domain Reports """
 
-	# class specific variables
-	_VT_DOMAINREPORT_URL = "https://www.virustotal.com/vtapi/v2/domain/report"
+	# VirusTotal Domain Report URL, method
+	
+	_URL = "https://www.virustotal.com/vtapi/v2/domain/report"
+	_METHOD = Gofer._HTTPGET			# Domain Reports require an HTTP GET
 
 	def __init__(self,APIKEY):		
 		""" Initialize VirusTotal with valid VirusTotal Public API 2.0 KEY """
 		Gofer.__init__(self,APIKEY)		
 	
-
-	def _request_report(self,domain):
-		""" return a list of VTFileScanReport objects """
-			
-		if Flags.DEBUG: print("\trequesting domain report for domain {0}".format(domain))
-		
-		# don't get a speeding ticket - Virus Total only allows 4 requests per minute with the Public API
-		self._rate_limiter()
-
-		# Domain Reports require an HTTP GET 
-
-		parameters = {"domain": domain,"apikey": self._apikey}
-		data = urllib.urlencode(parameters)
-		full_url = self._VT_DOMAINREPORT_URL + "?" + data
-		req = urllib2.Request(full_url)
-		
-		if Flags.VERBOSE: print("\trequest url = {0}".format(full_url))
-
-		try:
-			response = urllib2.urlopen(req)
-			httpstatus = response.code
-			if httpstatus == 204:
-				if Flags.VERBOSE:
-					police = u"\u2300"
-					print(u"{0} Sorry, Officer. VirusTotal Public API Rate Limit Exceeded {1}".format(police,httpstatus))
-				raise Gofer.RateLimitExceeded(httpstatus)	
-		
-		except urllib2.URLError as e:
-			print("URLError:")
-			print("\tUnable to reach server.")
-			print("\tREASON {0}".format(e.reason))
-			print("\tHOST {0}".format(req.host))
-			print("\tDATA {0}".format(req.data))
-			print("\tURL {0}".format(req.get_full_url()))
-		
-		except urllib2.HTTPError as e:
-			print("HTTPError:")
-			print("\treq:{0}".format(req))
-			print("\t{0} {1}".format(e.code,e.read()))
-
-		except Gofer.RateLimitExceeded as e:
-			police = u"\u1F6A8"
-			# police = u"\u2300"	
-			print(u"{0} VirusTotal Public API Rate Limit Exceeded {1}".format(police,e.status))
-			# print(u"Gofer.RateLimitExceeded: {0} VirusTotal Public API Rate Limit Exceeded".format(police))
-
-
-		if Flags.DEBUG: print("\t\tHTTP Status Code: {0}".format(httpstatus))
-
-		dict = {}
-		json = response.read()			
-
-		try:
-			dict = simplejson.loads(json)
-
-		except simplejson.scanner.JSONDecodeError as e:
-			if Flags.VERBOSE:
-				print("JSONDecodeError:")
-				print("\t{0}".format(e))
-				print("\tresponse.code: {0}".format(response.code))
-				print("\tresponse.msg: {0}".format(response.msg))
-				print("\tjson: {0}".format(repr(json)))
-
-		try:
-			report = DomainReport(dict)							# create a Domain Report object for each
-
-		except TypeError as e:
-			print("TypeError {0}".format(e))
-
-		if Flags.DEBUG: 
-			print("\tadding report for {0} to _DomainReports".format(domain))
-
-		self._reports[domain] = report 		   		# safe the reports to the Domain Report dictionary, keyed by domain
-
-		if Flags.VERBOSE: print("\t\tdomain: {0}, status: {1}, # of URLs detected: {2}".format(domain, report.status, report.numberof_urls))
-
 	def fetch(self):
 	
 		""" query VirusTotal for each domain stored in resource """
@@ -451,40 +504,40 @@ class DomainGofer(Gofer):
 			y += 1
 			if Flags.VERBOSE: print("\n{0} of {1}: Querying VirusTotal for domain {2}".format(y, self._resourcecount,domain))
 
-			try:	
-				self._request_report(domain)
+			# submit a Domain Report request to VirusTotal
+			response = self._fetch_report(self._METHOD,self._URL,domain)
 
-			except TypeError:
-				traceback.print_exc
+			# create a Domain Report object
+			report = DomainReport(response[0])															
 
+			if Flags.DEBUG: 
+				print("\tadding report for {0} to _DomainReports".format(domain))
+
+			self._reports[domain] = report 		   		# safe the reports to the Domain Report dictionary, keyed by domain
+
+
+			if Flags.VERBOSE: print("\tdomain: {0}, status: {1}, {2} URLs, categories: {3}".format(domain, report.status, report.numberof_urls, report.categories))
 			# **** BREAK to speed up testing **** 
 			if Flags.TEST and self._totalqueries == Gofer._VT_MAX_QUERIES_PER_MINUTE: break
-	
-
-	# @property
-	# def reports(self):
-	#     return self._reports
 
 
 class FileScanGofer(Gofer):
 	""" fetches VirusTotal File Scan Reports using the VirusTotal Public API """
 
-	# VirusTotal API service constants - fields/table headers
-	_VT_FILESCAN_REPORT_URL = "https://www.virustotal.com/vtapi/v2/file/report"
+	# VirusTotal File Scan Report URL, method
+	_URL = "https://www.virustotal.com/vtapi/v2/file/report"
+	_METHOD = Gofer._HTTPPOST
 
 	def __init__(self,APIKEY):
 		""" Initialize VirusTotal with valid VirusTotal Public API 2.0 KEY """
 
 		Gofer.__init__(self,APIKEY)		
 
-		# self._resource = []
-
 		self._hashlist = [] 
 		self._hashcount = 0
 
 		self._chunks = []
 		self._chunkcount = 0
-
 
 	@property
 	def resource(self):
@@ -508,11 +561,6 @@ class FileScanGofer(Gofer):
 		self._chunks = self._chunklist(self._hashlist,self._VT_MAX_QUERIES_PER_POST)
 		self._chunkcount = len(self._chunks)
 
-
-	# @property
-	# def reports(self):
-	#     return self._reports
-	
 	@property
 	def report_count(self):
 	    return len(self._reports)
@@ -525,7 +573,6 @@ class FileScanGofer(Gofer):
 	def chunkcount(self):
 	    return self._chunkcount
 
-
 	def _chunklist(self,lst,size):
 		""" splits a list into smaller lists with a maximum size 
 			employs a list comprehension to iterate over the input list in increments of step size
@@ -534,105 +581,25 @@ class FileScanGofer(Gofer):
 		"""
 		return [lst[x:x+size] for x in xrange(0, len(lst), size)]
 
-	def _request_report(self,hashlist):
-	
-		""" return a list of VTFileScanReport objects """
-			
-		# convert list to a comma seperated string
-		if len(hashlist) <= Gofer._VT_MAX_QUERIES_PER_POST:		# sanity check, can't have a list that's too big
-			_resource = ", ".join(hashlist)							    # convert list to comma seperated string called "resource"
-		else:
-			raise VTError(_TOOBIG)
-
-		""" source: https://www.virustotal.com/en/documentation/public-api/#getting-file-scans """
-
-		self._rate_limiter()									# don't get a speeding ticket
-	
-		parameters = {"resource": _resource,"apikey": self._apikey}
-		data = urllib.urlencode(parameters)
-		req = urllib2.Request(self._VT_FILESCAN_REPORT_URL, data)
-
-		if Flags.DEBUG:
-			print self._VT_FILESCAN_REPORT_URL
-			print parameters
-
-		try:
-			response = urllib2.urlopen(req)
-			httpstatus = response.code
-			if httpstatus == 204:
-				police = u"\u2301"
-				print(u"{0} VirusTotal Public API Rate Limit Exceeded {1}".format(police,httpstatus))
-				raise Gofer.RateLimitExceeded()
-		
-		except Gofer.RateLimitExceeded as e:
-			police = u"\u1F6A8"
-			print(u"{0} VirusTotal Public API Rate Limit Exceeded {1}".format(police,e))
-		
-		except urllib2.URLError as e:
-			print("URLError:")
-			print("\tUnable to reach server.")
-			print("\tREASON {0}".format(e.reason))
-			print("\tHOST {0}".format(req.host))
-			print("\tDATA {0}".format(req.data))
-			print("\tURL {0}".format(req.get_full_url()))
-	
-		except urllib2.HTTPError as e:
-			if Flags.DEBUG:
-				print("HTTPError:")
-				print("\treq:{0}".format(req))
-				print("\t{0} {1}".format(e.code,e.read()))
-
-		if Flags.DEBUG: print("\t\tHTTP Status Code: {0}".format(httpstatus))
-	
-		json = response.read()
-
-		try:
-			dict = simplejson.loads(json)
-
-			# if Flags.DEBUG: print dict
-	
-		except simplejson.scanner.JSONDecodeError as e:
-			if Flags.DEBUG:
-				print("JSONDecodeError:")
-				print("\t{0}".format(e))
-				print("\tresponse: {0}".format(response))
-				print("\tjson: {0}".format(repr(json)))
-
-		""" requests for a single resoure return differently than requests from multiple resources """
-
-		# print len(dict)											
-
-		if isinstance(dict,list):
-			for report in dict:											# extract reports one by one
-				fsr = FileScanReport(report)							# create a FileScanReport object for each
-				self._reports[fsr.resource] = fsr 						# safe the reports to the dictrionary, keyed by has
-		else:
-			fsr = FileScanReport(dict)
-			self._reports[fsr.resource] = fsr
-
-		if Flags.DEBUG: print fsr.resource, fsr.status, fsr.verbose_msg, fsr.positives, fsr.total
-	
-
 	def fetch(self):
 		""" query VirusTotal for File Scan Reports for every hash in hashlist """
 
 		# query VirusTotal, one chunk at a time
-
-		# # we can only query X times per minute
-		# first_query = time.time()
 		y = 0
 
 		for chunk in self._chunks:									# resource is already cut up into bite size chunks
 
 			y += 1
+
 			if Flags.VERBOSE: print("Querying VirusTotal for chunk {0} of {1}: {2} hashes".format(y, self._chunkcount, len(chunk)))
 
-			try:	
-				self._request_report(chunk)
+			resource = ", ".join(chunk)							    # convert list to comma seperated string resource
+	
+			response = self._fetch_report(self._METHOD,self._URL,resource)
 
-			except TypeError:
-				traceback.print_exc
+			for r in response:
+				report = FileScanReport(r)
+				self._reports[report.resource] = report
 
 			# **** insert BREAK to speed up testing **** 
 			if Flags.TEST: break
-	
