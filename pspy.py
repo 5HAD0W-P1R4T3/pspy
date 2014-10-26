@@ -136,7 +136,7 @@ def getAPIKEY(key):
 def parseCommandLine():
 	# parse command-line optons
 	parser = argparse.ArgumentParser(prog=TITLE, description=DESCRIPTION, epilog=EPILOG)
-	parser.add_argument("-v", "--verbose", help="increase verbosity (use --vv for greater effect)", action="store_true")
+	parser.add_argument("-v", "--verbose", help="increase verbosity (use --vv for greater effect)", action="count")
 	parser.add_argument("-t", "--test", help="test mode", action="store_true")
 	parser.add_argument("-k", "--key", help="VirusTotal 2 Public API key")
 	parser.add_argument("pid", nargs='?', type=int, help="process ID", default=None)
@@ -150,6 +150,8 @@ def parseCommandLine():
 print ("{0} {1}".format(TITLE,VERSION))
 
 args = parseCommandLine()
+
+print args
 
 VERBOSE = (args.verbose >= 1)
 DEBUG = (args.verbose > 1)
