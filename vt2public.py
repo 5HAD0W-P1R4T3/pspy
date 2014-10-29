@@ -404,13 +404,15 @@ class Gofer(object):
 				continue
 
 			except urllib2.URLError as e:
-				if Flags.DEBUG:
-					print("URLError:")
-					print("\tUnable to reach server.")
-					print("\tREASON {0}".format(e.reason))
-					print("\tHOST {0}".format(req.host))
-					print("\tDATA {0}".format(req.data))
-					print("\tURL {0}".format(req.get_full_url()))
+				# if Flags.DEBUG:
+				police = u"\u2300"
+				print(u"{0} Network Error: Unable to reach server {1} ({2})".format(police,req.host,e.reason))
+				raise
+					# print("URLError:")
+					# print("\tREASON {0}".format(e.reason))
+					# print("\tHOST {0}".format(req.host))
+					# print("\tDATA {0}".format(req.data))
+					# print("\tURL {0}".format(req.get_full_url()))
 				break
 
 			except urllib2.HTTPError as e:
@@ -431,31 +433,36 @@ class Gofer(object):
 		# don't get a speeding ticket - Virus Total only allows 4 requests per minute with the Public API
 		self._rate_limiter()
 		
-		if method == self._HTTPGET:
-			response = self._get(url,resource)
-
-		elif method == self._HTTPPOST:
-			response = self._post(url,resource)
-	
-		response_dict = {}
-		json = response.read()			
-
 		try:
-			response_dict = simplejson.loads(json)
 
-		except simplejson.scanner.JSONDecodeError as e:
-			if Flags.DEBUG:
-				print("JSONDecodeError:")
-				print("\t{0}".format(e))
-				print("\tresponse.code: {0}".format(response.code))
-				print("\tresponse.msg: {0}".format(response.msg))
-				print("\tjson: {0}".format(repr(json)))
+			if method == self._HTTPGET:
+				response = self._get(url,resource)
 
-		# for consistency's sake, always return a list
-		if isinstance(response_dict,list):
-			return response_dict
-		else:												
-			return [response_dict]
+			elif method == self._HTTPPOST:
+				response = self._post(url,resource)
+	
+			response_dict = {}
+		
+			try:
+				json = response.read()			
+				response_dict = simplejson.loads(json)
+
+			except simplejson.scanner.JSONDecodeError as e:
+				if Flags.DEBUG:
+					print("JSONDecodeError:")
+					print("\t{0}".format(e))
+					print("\tresponse.code: {0}".format(response.code))
+					print("\tresponse.msg: {0}".format(response.msg))
+					print("\tjson: {0}".format(repr(json)))
+
+			# for consistency's sake, always return a list
+			if isinstance(response_dict,list):
+				return response_dict
+			else:												
+				return [response_dict]
+
+		except urllib2.URLError as e:
+			return []
 
 	@property
 	def resource(self):

@@ -45,7 +45,7 @@ def SpyOnOne(pid):
 			row = [pid,p.name,None,None,None,p.sha256]
 			table.append(row)
 
-		header = ["pid","name","status","positives","total","permalink"]
+		header = ["pid","name","status","positives","total","permalink/hash"]
 		print(tabulate(table,header))
 
 	else:
@@ -86,7 +86,7 @@ def SpyOnAll():
 	if VERBOSE: print("Found {0} Reports".format(len(gofer.reports)))
 	if DEBUG: print("found {0} PIDs".format(len(pd.keys())))
 
-	header = ["pid","name","status","positives","total","permalink"]
+	header = ["pid","name","status","positives","total","permalink/hash"]
 
 	# merge process and reports list
 	row = []
@@ -101,9 +101,13 @@ def SpyOnAll():
 			table.append(row)
 
 		except KeyError as e:
-			# surpress records with out matches in Test Mode
-			if not TEST:	
-				row = [pid,"None","None","None","None","None"]
+			row = [pid,p.name,"None","None","None",p.sha256]
+			table.append(row)
+
+			# # surpress records with out matches in Test Mode
+			# if not TEST:	
+			# 	row = [pid,"None","None","None","None",p.sha256]
+			# 	table.append(row)
 
 			if DEBUG: 
 				print("KeyError:")
