@@ -122,10 +122,16 @@ class DomainReport(Report):
 				self._categories = "(" + (",".join(self._categories)) + ")"
 
 			# calculate some handy counters
-			self._numberof_URLs = -1
-			self._numberof_subdomains = -1
-			self._numberof_undetected_downloaded_samples = -1
-			self._numberof_detected_downloaded_samples = -1
+			# self._numberof_URLs = -1
+			# self._numberof_subdomains = -1
+			# self._numberof_undetected_downloaded_samples = -1
+			# self._numberof_detected_downloaded_samples = -1
+
+			self._numberof_URLs = 0
+			self._numberof_subdomains = 0
+			self._numberof_undetected_downloaded_samples = 0
+			self._numberof_detected_downloaded_samples = 0
+
 
 			if self._response_code == 1:
 				try:
